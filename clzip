@@ -1,0 +1,89 @@
+#!/bin/bash
+Version=1.05
+Myname="${0##*/}"
+
+:<<'DOC'
+= clzip - remove common files in two zip archives from the first
+
+= Synopsis
+clzip [options] cleanedfile[.zip] otherfile[.zip]	
+
+== Options
+-h,--help	print this help and exit
+-H,--Help	print full documentation via less and exit
+-V,--version	print version and exit
+
+= Description
+clzip removes files that are common in two zip archives from the
+first archive. This may be useful if you make full backups from time to
+time: many files that occur in the first backup will also occur in
+following backups.
+
+clzip considers two files to be identical if they have the same size and
+modification date and time.
+
+= Author
+[Wybo Dekker](wybo@dekkerdocumenten.nl)
+
+= Copyright
+Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)
+DOC
+
+    die() { local i; for i; do echo -e "$Myname: \\e[38;5;9m$i"; done 1>&2; exit 1; }
+helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'; exit; }
+helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed -n '1d;$d;p'|
+            less -Ps"$Myname-${Version/./·} documentation - type h for help, q to quit."
+		exit
+	  }
+instscr() { instscript --zip --pdf "$Myname"; exit; }
+
+test "$(zip --version|grep ^'This is'|cut -d' ' -f4|tr -d '.')" -ge 30 ||
+  die "This script needs zip version 3.0 or higher"
+
+
+if ! options=$(getopt \
+   -n "$Myname" \
+   -o hHVI \
+   -l help,Help,version \
+   -- "$@"
+); then exit 1; fi
+eval set -- "$options"
+while [ $# -gt 0 ]; do
+   case $1 in
+   (-h|--help)    helpsrt;;
+   (-H|--Help)    helpall;;
+   (-V|--version) echo $Version; exit;;
+   (-I)           instscr;;
+   (--)           shift;  break;;
+   (*)			  break;;
+   esac
+done
+[[ -n $1 && -n $2 ]] || die "I need 2 input files"
+
+a="${1%.zip}.zip"
+b="${2%.zip}.zip"
+[[ -e $a ]] || die "$a does not exist"
+[[ -e $b ]] || die "$b does not exist"
+[[ $a = "$b" ]] && die "zip files $a and $b are the same file!"
+
+tmp1=$(mktemp -t "$Myname-1.XXXXXXXXXX")
+tmp2=$(mktemp -t "$Myname-2.XXXXXXXXXX")
+tmp3=$(mktemp -t "$Myname-3.XXXXXXXXXX")
+trap 'rm -f $tmp1 $tmp2 $tmp3' 0 1 2 15
+
+unzip -l "$a" |tail -n +4|tac|tail -n +3|sort >"$tmp1"
+unzip -l "$b" |tail -n +4|tac|tail -n +3|sort >"$tmp2"
+
+cp -i "$a" "$a~" || die "No permission to write in $PWD"
+
+join -t\| "$tmp1" "$tmp2" |
+sed -e 's/\s*[0-9]\+  ....-..-.. ..:..   //' >"$tmp3"
+
+if [ "$(wc -l < "$tmp1")" -eq "$(wc -l < "$tmp3")" ]; then 
+  echo cleaned zip became empty - deleted \(there is a backup\)
+  rm "$a"
+  exit
+fi
+
+zip --no-wild -d@ "$a" <"$tmp3"
+zip -o "$a"	# set modification time back

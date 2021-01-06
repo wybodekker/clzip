@@ -5,7 +5,7 @@
 |    type | bash
 |  author | Wybo Dekker
 |   email | wybo@dekkerdocumenten.nl
-| version | 1.05
+| version | 1.06
 | license | GNU General Public License
 
 clzip removes files that are common in two zip archives from the

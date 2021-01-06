@@ -1,5 +1,5 @@
 #!/bin/bash
-Version=1.05
+Version=1.06
 Myname="${0##*/}"
 
 :<<'DOC'
@@ -29,36 +29,80 @@ modification date and time.
 Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)
 DOC
 
-    die() { local i; for i; do echo -e "$Myname: \\e[38;5;9m$i"; done 1>&2; exit 1; }
+REd='\e[38;5;9m' Nor='\e[0m'
+    die() { local i; for i; do echo -e "$Myname: $REd$i$Nor"; done 1>&2; exit 1; }
 helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'; exit; }
 helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed -n '1d;$d;p'|
             less -Ps"$Myname-${Version/./·} documentation - type h for help, q to quit."
 		exit
 	  }
-instscr() { instscript --zip --pdf "$Myname"; exit; }
 
-test "$(zip --version|grep ^'This is'|cut -d' ' -f4|tr -d '.')" -ge 30 ||
-  die "This script needs zip version 3.0 or higher"
+:<<'DOC' #----------------------------------------------------------------------
+= excheck
+synopsis:	 excheck executable1 [executable2...]
+description:	check if all needed execs are there,
+		getopt is GNU, and zip and unzip are not obsolete.
+DOC
+#-------------------------------------------------------------------------------
+excheck() {
+   local ok=true i
+   for i; do 
+      command -v "$i" > /dev/null && continue
+      Warn "Missing executable: $i"
+      ok=false
+   done
+   $ok || die
+   getopt -T 
+   [[ $? -ne 4 ]] && die "Your getopt is not GNU"
+   i=$(unzip -h |awk '{if ($1 == "UnZip") print $2}')
+   test "${i:0:1}" -ge 6 || die "Your unzip is too old (version $i)"
+   i=$(zip -h |awk '{if ($1 == "Zip") print $2}')
+   test "${i:0:1}" -ge 3 || die "Your zip is too old (version $i)"
+}
 
+:<<'DOC' #----------------------------------------------------------------------
+= handle_options
+synopsis:	 handle_options "$@"
+description:	Handle the options
+globals used:	 Myname Version full show restore conffile verbose named showdir
+DOC
+#-------------------------------------------------------------------------------
+handle_options() {
+   local options
+   if ! options=$(getopt \
+      -n "$Myname" \
+      -o hHVI \
+      -l help,Help,version \
+      -- "$@"
+   ); then exit 1; fi
+   eval set -- "$options"
+   
+   while [ $# -gt 0 ]; do
+      case $1 in
+      (-h|--help)    helpsrt
+		     ;;
+      (-H|--Help)    helpall
+		     ;;
+      (-V|--version) echo $Version
+		     exit
+		     ;;
+      (-I)           instscript "$0" ||
+		        die 'the -I option is for developers only'
+		     exit
+		     ;;
+      (--)           shift
+		     break
+		     ;;
+      (*)	     break
+		     ;;
+      esac
+   done
+}
 
-if ! options=$(getopt \
-   -n "$Myname" \
-   -o hHVI \
-   -l help,Help,version \
-   -- "$@"
-); then exit 1; fi
-eval set -- "$options"
-while [ $# -gt 0 ]; do
-   case $1 in
-   (-h|--help)    helpsrt;;
-   (-H|--Help)    helpall;;
-   (-V|--version) echo $Version; exit;;
-   (-I)           instscr;;
-   (--)           shift;  break;;
-   (*)			  break;;
-   esac
-done
-[[ -n $1 && -n $2 ]] || die "I need 2 input files"
+excheck zip unzip mktemp tac 
+handle_options "$@"
+
+test $# -eq 2 || die "I need 2 input files"
 
 a="${1%.zip}.zip"
 b="${2%.zip}.zip"

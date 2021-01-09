@@ -12,6 +12,7 @@ clzip [options] cleanedfile[.zip] otherfile[.zip]
 -h,--help	print this help and exit
 -H,--Help	print full documentation via less and exit
 -V,--version	print version and exit
+-d,--dry	do a dry run, keeping temporary files
 
 = Description
 clzip removes files that are common in two zip archives from the
@@ -64,27 +65,34 @@ excheck() {
 = handle_options
 synopsis:	 handle_options "$@"
 description:	Handle the options
-globals used:	 Myname Version full show restore conffile verbose named showdir
+globals used:	 Myname Version args dry
 DOC
 #-------------------------------------------------------------------------------
 handle_options() {
    local options
    if ! options=$(getopt \
       -n "$Myname" \
-      -o hHVI \
-      -l help,Help,version \
+      -o hHVId \
+      -l help,Help,version,dry \
       -- "$@"
    ); then exit 1; fi
    eval set -- "$options"
-   
-   while [ $# -gt 0 ]; do
+   dry=false  
+   while true; do
       case $1 in
-      (-h|--help)    helpsrt
+      (-h|--help)    # print this help and exit
+		     helpsrt
 		     ;;
-      (-H|--Help)    helpall
+      (-H|--Help)    # print full documentation via less and exit
+		     helpall
 		     ;;
-      (-V|--version) echo $Version
+      (-V|--version) # print version and exit
+		     echo $Version
 		     exit
+		     ;;
+      (-d|--dry)     # do a dry run, keeping temporary files
+		     dry=true
+		     shift
 		     ;;
       (-I)           instscript "$0" ||
 		        die 'the -I option is for developers only'
@@ -97,12 +105,14 @@ handle_options() {
 		     ;;
       esac
    done
+   args=( "$@" )
 }
 
 excheck zip unzip mktemp tac 
 handle_options "$@"
+set -- "${args[@]}"
 
-test $# -eq 2 || die "I need 2 input files"
+test $# -eq 2 || die "I need 2 input files, not $#"
 
 a="${1%.zip}.zip"
 b="${2%.zip}.zip"
@@ -110,24 +120,31 @@ b="${2%.zip}.zip"
 [[ -e $b ]] || die "$b does not exist"
 [[ $a = "$b" ]] && die "zip files $a and $b are the same file!"
 
-tmp1=$(mktemp -t "$Myname-1.XXXXXXXXXX")
-tmp2=$(mktemp -t "$Myname-2.XXXXXXXXXX")
-tmp3=$(mktemp -t "$Myname-3.XXXXXXXXXX")
-trap 'rm -f $tmp1 $tmp2 $tmp3' 0 1 2 15
+tmp=$(mktemp -dt "$Myname.XXXXXXXXXX")
+$dry || trap 'rm -rf $tmp' 0 1 2 15
 
-unzip -l "$a" |tail -n +4|tac|tail -n +3|sort >"$tmp1"
-unzip -l "$b" |tail -n +4|tac|tail -n +3|sort >"$tmp2"
+# list both zips:
+unzip -l "$a" |tail -n +4|tac|tail -n +3|sort >"$tmp/1"
+unzip -l "$b" |tail -n +4|tac|tail -n +3|sort >"$tmp/2"
 
-cp -i "$a" "$a~" || die "No permission to write in $PWD"
+# make a backup:
+$dry || cp -i "$a" "$a~" || die "No permission to write in $PWD"
 
-join -t\| "$tmp1" "$tmp2" |
-sed -e 's/\s*[0-9]\+  ....-..-.. ..:..   //' >"$tmp3"
+# files to be deleted:
+join -t\| "$tmp/1" "$tmp/2" |
+sed -e 's/\s*[0-9]\+  ....-..-.. ..:..   //' >"$tmp/3"
 
-if [ "$(wc -l < "$tmp1")" -eq "$(wc -l < "$tmp3")" ]; then 
+# list of cleaned zip is as long as list of deleted files?
+if [ "$(wc -l < "$tmp/1")" -eq "$(wc -l < "$tmp/3")" ]; then 
   echo cleaned zip became empty - deleted \(there is a backup\)
-  rm "$a"
+  $dry || rm "$a"
   exit
 fi
 
-zip --no-wild -d@ "$a" <"$tmp3"
+# doit, saving in temporary directory if it's a dry run:
+if $dry; then
+   sed 's/^/deleting: /' $tmp/3
+   die "This was a dry run, nothing changed" "temp files in $tmp"
+fi
+zip --no-wild -d@ "$a" <"$tmp/3"
 zip -o "$a"	# set modification time back

@@ -1,5 +1,5 @@
 #!/bin/bash
-Version=1.06
+Version=1.07
 Myname="${0##*/}"
 
 :<<'DOC'
@@ -24,7 +24,7 @@ clzip considers two files to be identical if they have the same size and
 modification date and time.
 
 = Author
-[Wybo Dekker](wybo@dekkerdocumenten.nl)
+[Wybo Dekker](wybodekker@me.com)
 
 = Copyright
 Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)

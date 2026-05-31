@@ -2,13 +2,14 @@
 Version=1.07
 Myname="${0##*/}"
 
-:<<'DOC'
+doc=$(cat \
+<<'DOC'
 = clzip - remove common files in two zip archives from the first
 
 = Synopsis
 clzip [options] cleanedfile[.zip] otherfile[.zip]	
 
-== Options
+= Options
 -h,--help	print this help and exit
 -H,--Help	print full documentation via less and exit
 -V,--version	print version and exit
@@ -29,12 +30,14 @@ modification date and time.
 = Copyright
 Released under the [GNU General Public License](www.gnu.org/copyleft/gpl.html)
 DOC
+)
 
-REd='\e[38;5;9m' Nor='\e[0m'
-    die() { local i; for i; do echo -e "$Myname: $REd$i$Nor"; done 1>&2; exit 1; }
-helpsrt() { sed -n '/^= Synopsis/,/^= /p' "$0"|sed '1d;$d'; exit; }
-helpall() { sed -n "/^:<<'DOC'$/,/^DOC/p" "$0"|sed '1d;$d'|
-            less -P"$Myname-${Version/./·} (press h for help, q to quit)";exit; }
+# --- colors, help from embedded doc, die ---
+[ -t 1 ] && { Red=$'\e[1;31m' Nor=$'\e[0m'; } || Red='' Nor=''
+nv="-$Myname-${Version/./\\.} (press h for help, q to quit)"
+helpsrt() { sed -n '/^= Synopsis/,/^= Desc/{//d;p}' <<<"$doc"; exit; }
+helpall() { less -P"$nv" <<<"$doc"; exit; }
+    die() { printf "%s$Nor\n" "${@/#/$Myname: $Red}" >&2; exit 1; }
 
 :<<'DOC' #----------------------------------------------------------------------
 = excheck
